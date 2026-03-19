@@ -1,0 +1,112 @@
+-- Telemetry state evaluation and critical-value thresholds for audio alerts.
+-- Thresholds: battery per-cell < 3.5V, LQ < 25%, RSSI < -100 dBm.
+
+local M = {}
+
+M.OK           = "OK"
+M.WARNING      = "WARNING"
+M.LOW          = "LOW"
+M.CRITICAL     = "CRITICAL"
+M.UNKNOWN      = "UNKNOWN"
+M.DISCONNECTED = "DISCONNECTED"
+
+-- Critical thresholds for audio readout (with hysteresis).
+M.CRITICAL_BATTERY_CELL_V = 3.5
+M.CRITICAL_LQ_PERCENT     = 25
+M.CRITICAL_RSSI_DBM       = -100
+
+local function detectCellCount(voltage)
+  if not voltage or voltage <= 0 then return 1 end
+  return math.max(1, math.ceil((voltage / 4.35) - 0.0001))
+end
+
+function M.evaluateBattery(voltage)
+  if not voltage or voltage <= 0 then return M.UNKNOWN end
+  local cells = detectCellCount(voltage)
+  local cellV = voltage / cells
+  if cellV > 3.7 then return M.OK
+  elseif cellV >= 3.5 then return M.WARNING
+  else return M.CRITICAL
+  end
+end
+
+function M.evaluateLinkQuality(lq, isAvailable)
+  if not isAvailable or lq == nil then return M.UNKNOWN end
+  if lq > 90 then return M.OK
+  elseif lq >= 70 then return M.WARNING
+  else return M.CRITICAL
+  end
+end
+
+function M.evaluateRSSI(rssi, isAvailable)
+  if not isAvailable or rssi == nil or rssi == 0 then return M.UNKNOWN end
+  if rssi > -65 then return M.OK
+  elseif rssi >= -85 then return M.WARNING
+  else return M.CRITICAL
+  end
+end
+
+function M.evaluateSatellites(sats, isAvailable)
+  if not isAvailable or sats == nil then return M.UNKNOWN end
+  if sats >= 10 then return M.OK
+  elseif sats >= 6 then return M.WARNING
+  else return M.CRITICAL
+  end
+end
+
+function M.evaluateCurrent(current, isAvailable)
+  if not isAvailable or current == nil then return M.UNKNOWN end
+  if current < 0 then return M.UNKNOWN end
+  return M.OK
+end
+
+function M.evaluateTxPower(txPower)
+  if txPower == nil then return M.UNKNOWN end
+  return (txPower > 0) and M.OK or M.UNKNOWN
+end
+
+function M.evaluatePacketRate(rate, isAvailable)
+  if not isAvailable or rate == nil or rate <= 0 then return M.UNKNOWN end
+  return M.OK
+end
+
+function M.evaluate(snapshot)
+  if not snapshot then
+    return {
+      battery = M.DISCONNECTED, linkQuality = M.DISCONNECTED, rssi = M.DISCONNECTED,
+      current = M.DISCONNECTED, satellites = M.DISCONNECTED, sats = M.DISCONNECTED,
+      txPower = M.DISCONNECTED, packetRate = M.DISCONNECTED,
+    }
+  end
+  if snapshot.linkLost or not snapshot.connected then
+    return {
+      battery = M.DISCONNECTED, linkQuality = M.DISCONNECTED, rssi = M.DISCONNECTED,
+      current = M.DISCONNECTED, satellites = M.DISCONNECTED, sats = M.DISCONNECTED,
+      txPower = M.DISCONNECTED, packetRate = M.DISCONNECTED,
+    }
+  end
+
+  local av = snapshot.available or {}
+  local satsState = M.evaluateSatellites(snapshot.satellites, av.satellites)
+  return {
+    battery     = M.evaluateBattery(snapshot.battery),
+    linkQuality = M.evaluateLinkQuality(snapshot.linkQuality, av.linkQuality),
+    rssi        = M.evaluateRSSI(snapshot.rssi, av.rssi),
+    current     = M.evaluateCurrent(snapshot.current, av.current),
+    satellites  = satsState,
+    sats        = satsState,
+    txPower     = M.evaluateTxPower(snapshot.txPower),
+    packetRate  = M.evaluatePacketRate(snapshot.packetRate, av.packetRate),
+  }
+end
+
+-- Returns true if any critical threshold is crossed (for audio alert).
+function M.isCritical(snapshot, state)
+  if not snapshot or not state or snapshot.linkLost then return false end
+  if state.battery == M.CRITICAL then return true end
+  if state.linkQuality == M.CRITICAL then return true end
+  if state.rssi == M.CRITICAL then return true end
+  return false
+end
+
+return M
