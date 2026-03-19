@@ -90,7 +90,7 @@ function M.draw(rect, telemetry, state, theme)
   if av.tempVTX and t.tempVTX ~= nil then temps[#temps + 1] = "VTX:" .. math.floor(t.tempVTX + 0.5) .. "°" end
   if av.tempMotor and t.tempMotor ~= nil then temps[#temps + 1] = "M:" .. math.floor(t.tempMotor + 0.5) .. "°" end
   local tempStr = #temps > 0 and table.concat(temps, " ") or "--"
-  if #tempStr > 40 then tempStr = tempStr:sub(1, 37) .. ".." end
+  if #tempStr > 40 then tempStr = string.sub(tempStr, 1, 37) .. ".." end
   drawIconLabel(x, row2Y, icons.current, tempStr, textColor)
 
   -- GPS coords line
@@ -98,7 +98,7 @@ function M.draw(rect, telemetry, state, theme)
   local pilotCoord = (av.pilotPosition and t.pilotLat and t.pilotLon) and formatCoord(t.pilotLat, t.pilotLon) or nil
   if droneCoord or pilotCoord then
     local line = "D:" .. (droneCoord or "--") .. " P:" .. (pilotCoord or "--")
-    if #line > 72 then line = line:sub(1, 69) .. "..." end
+    if #line > 72 then line = string.sub(line, 1, 69) .. "..." end
     drawText(x, y + h - 10, line, SMLSIZE, textColor)
   end
 end

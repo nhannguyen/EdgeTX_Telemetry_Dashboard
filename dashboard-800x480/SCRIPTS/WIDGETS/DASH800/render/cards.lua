@@ -92,7 +92,7 @@ local function drawCompositeCard(rect, icon, title, lines, showBar, frac)
   local yy = y + 18
   for i = 1, #lines do
     if yy + lineH <= y + h - (showBar and 12 or 4) then
-      drawShadowText(left, yy, (lines[i] or "--"):sub(1, 28), SMLSIZE, _WHITE)
+      drawShadowText(left, yy, string.sub(lines[i] or "--", 1, 28), SMLSIZE, _WHITE)
       yy = yy + lineH
     end
   end

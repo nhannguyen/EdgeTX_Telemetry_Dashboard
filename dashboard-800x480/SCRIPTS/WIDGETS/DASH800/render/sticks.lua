@@ -64,7 +64,7 @@ local function toNum(v)
     if type(v.value) == "number" then return v.value end
     if type(v.val) == "number" then return v.val end
   end
-  if type(v) == "string" then local n = tonumber(v:match("%-?%d+%.?%d*")) if n then return n end end
+  if type(v) == "string" then local n = tonumber(string.match(v, "%-?%d+%.?%d*")) if n then return n end end
   return nil
 end
 

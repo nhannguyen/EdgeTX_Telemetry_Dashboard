@@ -30,13 +30,13 @@ end
 -- Map ELRS device name to antenna mode label.
 function M.deviceNameToAntennaMode(name)
   if type(name) ~= "string" or #name == 0 then return nil end
-  local n = name:lower()
-  if n:find("gemini") then return "Gemini Xrossband" end
-  if n:find("diversity") then
-    if n:find("900") then return "Diversity 900" end
+  local n = string.lower(name)
+  if string.find(n, "gemini") then return "Gemini Xrossband" end
+  if string.find(n, "diversity") then
+    if string.find(n, "900") then return "Diversity 900" end
     return "Diversity 2.4"
   end
-  if n:find("900") then return "Single 900" end
+  if string.find(n, "900") then return "Single 900" end
   return "Single 2.4"
 end
 

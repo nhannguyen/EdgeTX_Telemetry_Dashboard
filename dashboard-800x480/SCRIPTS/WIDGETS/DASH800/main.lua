@@ -67,11 +67,13 @@ local function resolveTheme(options)
 end
 
 local function topBarColorFromArmState(telemetry)
-  if not telemetry or not telemetry.armState or type(telemetry.armState) ~= "string" then return nil end
-  local s = telemetry.armState:upper()
-  if s:find("ARMED") and not s:find("PRE") then return _GREEN end
-  if s:find("PREARMED") then return _YELLOW end
-  if s:find("DISARMED") or s:find("DIS") then return _RED end
+  if type(telemetry) ~= "table" then return nil end
+  local arm = telemetry.armState
+  if type(arm) ~= "string" or arm == "" then return nil end
+  local s = string.upper(arm)
+  if string.find(s, "ARMED") and not string.find(s, "PRE") then return _GREEN end
+  if string.find(s, "PREARMED") then return _YELLOW end
+  if string.find(s, "DISARMED") or string.find(s, "DIS") then return _RED end
   return nil
 end
 
@@ -133,9 +135,10 @@ end
 local function background(widget) end
 
 local function isArmed(telemetry)
-  if not telemetry or not telemetry.available or not telemetry.available.armState then return false end
+  if type(telemetry) ~= "table" then return false end
+  if not telemetry.available or not telemetry.available.armState then return false end
   local a = telemetry.armState
-  if type(a) == "string" and a:lower():find("arm") and not a:lower():find("dis") then return true end
+  if type(a) == "string" and string.find(string.lower(a), "arm") and not string.find(string.lower(a), "dis") then return true end
   return false
 end
 

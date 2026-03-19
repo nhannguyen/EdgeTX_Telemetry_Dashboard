@@ -38,8 +38,8 @@ local function truncate(text, maxW, cw)
   cw = cw or 5
   local n = math.max(1, math.floor(maxW / cw))
   if #text <= n then return text end
-  if n <= 3 then return text:sub(1, n) end
-  return text:sub(1, n - 3) .. "..."
+  if n <= 3 then return string.sub(text, 1, n) end
+  return string.sub(text, 1, n - 3) .. "..."
 end
 
 local function droneName(telemetry)
@@ -112,19 +112,19 @@ end
 
 local function flightModeToIconKey(fm)
   if not fm or type(fm) ~= "string" or fm == "" or fm == "--" then return "unknown" end
-  local s = fm:lower():gsub("%s+", "")
-  if s:find("angle") then return "angle" end
-  if s:find("horizon") then return "horizon" end
-  if s:find("acro") or s:find("rate") then return "acro" end
-  if s:find("rth") or s:find("return") then return "rth" end
-  if s:find("waypoint") or s:find("wp") then return "waypoint" end
+  local s = string.gsub(string.lower(fm), "%s+", "")
+  if string.find(s, "angle") then return "angle" end
+  if string.find(s, "horizon") then return "horizon" end
+  if string.find(s, "acro") or string.find(s, "rate") then return "acro" end
+  if string.find(s, "rth") or string.find(s, "return") then return "rth" end
+  if string.find(s, "waypoint") or string.find(s, "wp") then return "waypoint" end
   return "unknown"
 end
 
 local function truncateAntenna(text, maxChars)
   maxChars = maxChars or 10
   if not text or #text <= maxChars then return text or "" end
-  return text:sub(1, maxChars - 2) .. ".."
+  return string.sub(text, 1, maxChars - 2) .. ".."
 end
 
 function M.draw(bounds, telemetry, state, theme)

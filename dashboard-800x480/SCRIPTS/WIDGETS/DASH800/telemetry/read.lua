@@ -124,7 +124,7 @@ local function toNumber(v)
     if type(v.val) == "number" then return v.val end
   end
   if type(v) == "string" then
-    local n = tonumber(v:match("%-?%d+%.?%d*"))
+    local n = tonumber(string.match(v, "%-?%d+%.?%d*"))
     if n then return n end
   end
   return nil
@@ -151,12 +151,12 @@ end
 
 local function normalizeArmState(raw)
   if type(raw) == "string" and raw ~= "" then
-    local s = raw:lower()
-    if s:find("arm") and not s:find("dis") and not s:find("pre") then
+    local s = string.lower(raw)
+    if string.find(s, "arm") and not string.find(s, "dis") and not string.find(s, "pre") then
       return "ARMED"
     end
-    if s:find("pre") then return "PREARMED" end
-    if s:find("dis") or s:find("0") then return "DISARMED" end
+    if string.find(s, "pre") then return "PREARMED" end
+    if string.find(s, "dis") or string.find(s, "0") then return "DISARMED" end
     return raw
   end
   local n = toNumber(raw)
