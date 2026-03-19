@@ -11,9 +11,8 @@ local ZONE_H = 480
 local GAP = 2
 
 local TOP_BAR_H = 44
-local CARD_ROW_H = 126  -- 44 + 2 + 3*126 + 2*2 + 36 + 16 = 480
+local CARD_ROW_H = 126  -- 44 + 2 + 3*126 + 2*2 + 36 = 466 <= 480
 local TIMERS_H = 36
-local FOOTER_H = 16
 
 function M.compute(zone)
   if not zone then return nil end
@@ -28,7 +27,6 @@ function M.compute(zone)
   local row2Y = row1Y + CARD_ROW_H + GAP
   local row3Y = row2Y + CARD_ROW_H + GAP
   local timersY = row3Y + CARD_ROW_H + GAP
-  local footerY = y + h - FOOTER_H
 
   return {
     zone      = rect(x, y, w, h),
@@ -38,7 +36,6 @@ function M.compute(zone)
     cardRow2  = rect(x, row2Y, w, CARD_ROW_H),
     cardRow3  = rect(x, row3Y, w, CARD_ROW_H),
     timersRow = rect(x, timersY, w, TIMERS_H),
-    footerRow = rect(x, footerY, w, FOOTER_H),
   }
 end
 

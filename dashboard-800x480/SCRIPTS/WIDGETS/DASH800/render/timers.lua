@@ -3,8 +3,11 @@
 local M = {}
 
 local WIDGET_PATH = "DASH800"
-local ICON_SIZE = 24
+-- Icon size token (clock icon; consistent with topbar ICON_TOPBAR_LARGE).
+local ICON_TIMER = 24
+local ICON_SIZE = ICON_TIMER
 local ICON_GAP = 8
+local SMLSIZE_H = 6  -- SMLSIZE font height for vertical centering
 local _WHITE = (type(WHITE) == "number") and WHITE or 0xFFFF
 local _BLACK = 0x0000
 
@@ -58,12 +61,15 @@ local function formatMMSS(ticks)
 end
 
 local function drawTimerCell(x, y, w, h, icon, label, valueStr, textColor)
+  local textY = y + math.floor((h - SMLSIZE_H) / 2)
   local left = x + 4
   if icon and lcd.drawBitmap then
-    lcd.drawBitmap(icon, left, y + math.floor((h - ICON_SIZE) / 2))
+    -- Center clock icon vertically with the text line
+    local iconY = textY + math.floor(SMLSIZE_H / 2) - math.floor(ICON_SIZE / 2)
+    lcd.drawBitmap(icon, left, iconY)
     left = left + ICON_SIZE + ICON_GAP
   end
-  drawText(left, y + math.floor((h - 10) / 2), label .. " " .. valueStr, SMLSIZE, textColor)
+  drawText(left, textY, label .. " " .. valueStr, SMLSIZE, textColor)
 end
 
 function M.draw(rect, telemetry, state, theme, widgetState)

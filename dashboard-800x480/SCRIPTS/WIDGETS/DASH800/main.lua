@@ -29,7 +29,6 @@ local sticksRenderer = loadModule("render/sticks.lua")
 local cardsRenderer  = loadModule("render/cards.lua")
 local contextRenderer = loadModule("render/context.lua")
 local timersRenderer = loadModule("render/timers.lua")
-local footerRenderer = loadModule("render/footer.lua")
 
 local _WHITE = (type(WHITE) == "number") and WHITE or 0xFFFF
 local _BLACK = 0x0000
@@ -37,6 +36,7 @@ local _RED = (type(RED) == "number") and RED or 0xF800
 local _GREEN = (type(GREEN) == "number") and GREEN or 0x07E0
 local _YELLOW = (type(YELLOW) == "number") and YELLOW or 0xFFE0
 
+-- More opaque values for better contrast (4.5:1) over decorative backgrounds; default index 1 = 6
 local TRANSP_VALUES = { 6, 8, 10, 12 }
 local OPTION_COMBO = (type(COMBO) == "number" and COMBO) or (type(CHOICE) == "number" and CHOICE)
 local WIDGET_OPTIONS = OPTION_COMBO and
@@ -47,11 +47,11 @@ local function resolveTransparencyValue(raw)
   local v = raw
   if type(v) == "table" then v = v.value or v.val end
   if type(v) == "string" then v = tonumber(v) end
-  if type(v) ~= "number" then return 8 end
+  if type(v) ~= "number" then return 6 end  -- default more opaque for readability
   local n = math.floor(v + 0.5)
   if n >= 1 and n <= 4 then return TRANSP_VALUES[n] end
   if n >= 0 and n <= 3 then return TRANSP_VALUES[n + 1] end
-  return 8
+  return 6
 end
 
 local function resolveTheme(options)
@@ -61,6 +61,7 @@ local function resolveTheme(options)
     isLight = not isDark,
     bgColor = isDark and _BLACK or _WHITE,
     textColor = isDark and _WHITE or 0x9CF3,
+    borderColor = isDark and _WHITE or 0x9CF3,  -- single token for card/panel borders
     iconFolder = isDark and "dark" or "light",
     transparency = transparency_value,
   }
@@ -84,6 +85,14 @@ local function drawSectionWash(rect, theme, colorOverride)
     lcd.setColor(CUSTOM_COLOR, fillColor)
     pcall(lcd.drawFilledRectangle, rect.x, rect.y, rect.w, rect.h, CUSTOM_COLOR, theme.transparency)
   end
+end
+
+local function anyAvailable(av)
+  if not av or type(av) ~= "table" then return false end
+  for _, v in pairs(av) do
+    if v then return true end
+  end
+  return false
 end
 
 local function zoneChanged(widget)
@@ -232,8 +241,10 @@ local function refresh(widget, event, touchState)
   end
 
   local slots = widget.slots
+  local t = widget.telemetry
+  local noTelemetry = t and (t.linkLost or not t.connected) and not anyAvailable(t.available or {})
+
   if slots and slots.byId then
-    -- Row 1: wash each card area, then left stick (P1), cards draw (P2,P4,P5,P6,P7), right stick (P3)
     local p1 = slots.byId.P1
     local p2 = slots.byId.P2
     local p3 = slots.byId.P3
@@ -249,14 +260,35 @@ local function refresh(widget, event, touchState)
     if p6 then drawSectionWash(p6, theme) end
     if p7 then drawSectionWash(p7, theme) end
 
-    if sticksRenderer and sticksRenderer.drawLeftStick and p1 then
-      sticksRenderer.drawLeftStick(p1, theme)
-    end
-    if cardsRenderer and cardsRenderer.draw then
-      cardsRenderer.draw(widget.layout, widget.slots, widget.telemetry, widget.state, theme)
-    end
-    if sticksRenderer and sticksRenderer.drawRightStick and p3 then
-      sticksRenderer.drawRightStick(p3, theme)
+    if noTelemetry then
+      -- Single centered message instead of full grid of "--" (optional no-telemetry view)
+      local layout = widget.layout
+      local gap = layout.gap or 2
+      local cardY = layout.cardRow1.y
+      local cardH = layout.cardRow1.h + gap + layout.cardRow2.h + gap + layout.cardRow3.h
+      local msg = "Connect receiver for telemetry"
+      local msgW, msgH = #msg * 5, 12
+      local cx = layout.cardRow1.x + math.floor((layout.cardRow1.w - msgW) / 2)
+      local cy = cardY + math.floor((cardH - msgH) / 2)
+      if lcd and lcd.drawText then
+        local tc = theme.textColor or (type(WHITE) == "number" and WHITE or 0xFFFF)
+        if type(CUSTOM_COLOR) == "number" and lcd.setColor then
+          lcd.setColor(CUSTOM_COLOR, tc)
+          lcd.drawText(cx, cy, msg, MIDSIZE + CUSTOM_COLOR)
+        else
+          lcd.drawText(cx, cy, msg, MIDSIZE)
+        end
+      end
+    else
+      if sticksRenderer and sticksRenderer.drawLeftStick and p1 then
+        sticksRenderer.drawLeftStick(p1, theme, widget.telemetry)
+      end
+      if cardsRenderer and cardsRenderer.draw then
+        cardsRenderer.draw(widget.layout, widget.slots, widget.telemetry, widget.state, theme)
+      end
+      if sticksRenderer and sticksRenderer.drawRightStick and p3 then
+        sticksRenderer.drawRightStick(p3, theme, widget.telemetry)
+      end
     end
   end
 
@@ -265,22 +297,6 @@ local function refresh(widget, event, touchState)
     if timersRenderer and timersRenderer.draw then
       timersRenderer.draw(widget.layout.timersRow, widget.telemetry, widget.state, theme, widget)
     end
-  end
-
-  if widget.layout.footerRow then
-    drawSectionWash(widget.layout.footerRow, theme)
-    if footerRenderer and footerRenderer.draw then
-      footerRenderer.draw(widget.layout.footerRow, widget.telemetry, widget.state, theme)
-    end
-  end
-
-  if widget.telemetry and widget.telemetry.linkLost and lcd and lcd.drawFilledRectangle and lcd.drawText then
-    local z = widget.zone
-    if type(CUSTOM_COLOR) == "number" and lcd.setColor then
-      lcd.setColor(CUSTOM_COLOR, _RED)
-      lcd.drawFilledRectangle(z.x, z.y + 44, z.w, 18, CUSTOM_COLOR)
-    end
-    lcd.drawText(z.x + 8, z.y + 48, "LINK LOST - last values shown", MIDSIZE)
   end
 end
 

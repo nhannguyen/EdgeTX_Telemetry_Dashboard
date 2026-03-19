@@ -118,39 +118,59 @@ local function drawDot(cx, cy, color)
   end
 end
 
-local function drawStickBox(rect, xVal, yVal)
+local function drawStickBox(rect, xVal, yVal, drawPosition, placeholderLabel, theme)
   local x, y, w, h = rect.x, rect.y, rect.w, rect.h
   if lcd.drawLine then
-    local c = _WHITE
+    local c = (theme and (theme.borderColor or theme.textColor)) or _WHITE
     if type(CUSTOM_COLOR) == "number" and lcd.setColor then lcd.setColor(CUSTOM_COLOR, c) c = CUSTOM_COLOR end
-    lcd.drawLine(x, y, x + w - 1, y, SOLID, c)
-    lcd.drawLine(x, y + h - 1, x + w - 1, y + h - 1, SOLID, c)
-    lcd.drawLine(x, y, x, y + h - 1, SOLID, c)
-    lcd.drawLine(x + w - 1, y, x + w - 1, y + h - 1, SOLID, c)
+    local solid = (type(SOLID) == "number") and SOLID or 0
+    lcd.drawLine(x, y, x + w - 1, y, solid, c)
+    lcd.drawLine(x, y + h - 1, x + w - 1, y + h - 1, solid, c)
+    lcd.drawLine(x, y, x, y + h - 1, solid, c)
+    lcd.drawLine(x + w - 1, y, x + w - 1, y + h - 1, solid, c)
   end
-  local cx = x + math.floor(w / 2)
-  local cy = y + math.floor(h / 2)
-  local minX, maxX = x + 4, x + w - 5
-  local minY, maxY = y + 4, y + h - 5
-  local px = mapAxis(xVal, minX, maxX, false)
-  local py = mapAxis(yVal, minY, maxY, true)
-  drawDot(px, py, _BLACK)
+  -- Placeholder when no telemetry: larger letter (MIDSIZE) + "Stick" label for visibility
+  if placeholderLabel and lcd and lcd.drawText then
+    local textColor = (theme and theme.textColor) or _WHITE
+    local letterW, letterH = 8, 12   -- MIDSIZE approx
+    local labelW, labelH = 24, 6    -- "Stick" SMLSIZE
+    local totalH = letterH + 2 + labelH
+    local startY = y + math.floor((h - totalH) / 2)
+    local txLetter = x + math.floor((w - letterW) / 2)
+    drawText(txLetter, startY, placeholderLabel, MIDSIZE, textColor)
+    local txLabel = x + math.floor((w - labelW) / 2)
+    drawText(txLabel, startY + letterH + 2, "Stick", SMLSIZE, textColor)
+  end
+  -- Only draw position dot when stick input is available; otherwise avoid stray black square
+  if drawPosition and lcd and lcd.drawFilledRectangle then
+    local cx = x + math.floor(w / 2)
+    local cy = y + math.floor(h / 2)
+    local minX, maxX = x + 4, x + w - 5
+    local minY, maxY = y + 4, y + h - 5
+    local px = mapAxis(xVal, minX, maxX, false)
+    local py = mapAxis(yVal, minY, maxY, true)
+    drawDot(px, py, _BLACK)
+  end
 end
 
-function M.drawLeftStick(rect, theme)
+function M.drawLeftStick(rect, theme, telemetry)
   if not rect then return end
   ensureIcons(theme)
+  local hasInput = type(getValue) == "function"
   local yaw = readInput(INPUT_SOURCES.yaw)
   local throttle = readInput(INPUT_SOURCES.throttle)
-  drawStickBox(rect, yaw, throttle)
+  local showPlaceholder = not (telemetry and telemetry.connected) and not hasInput
+  drawStickBox(rect, yaw, throttle, hasInput, showPlaceholder and "L" or nil, theme)
 end
 
-function M.drawRightStick(rect, theme)
+function M.drawRightStick(rect, theme, telemetry)
   if not rect then return end
   ensureIcons(theme)
+  local hasInput = type(getValue) == "function"
   local roll = readInput(INPUT_SOURCES.roll)
   local pitch = readInput(INPUT_SOURCES.pitch)
-  drawStickBox(rect, roll, pitch)
+  local showPlaceholder = not (telemetry and telemetry.connected) and not hasInput
+  drawStickBox(rect, roll, pitch, hasInput, showPlaceholder and "R" or nil, theme)
 end
 
 return M

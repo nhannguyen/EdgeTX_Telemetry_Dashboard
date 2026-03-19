@@ -3,8 +3,11 @@
 local M = {}
 
 local WIDGET_PATH = "DASH800"
-local ICON_SIZE = 24
-local ICON_GAP = 6
+-- Icon size tokens: ICON_TITLE for card title icons (consistent with topbar/timers naming).
+local ICON_TITLE = 16
+local ICON_SIZE = ICON_TITLE
+local ICON_GAP = 8
+local BAR_H = 4       -- thin progress bar at bottom
 local _WHITE = (type(WHITE) == "number") and WHITE or 0xFFFF
 local _BLACK = 0x0000
 local _GREEN = (type(GREEN) == "number") and GREEN or 0x07E0
@@ -52,16 +55,15 @@ end
 local function drawBar(rect, frac)
   if not rect or not lcd then return end
   local x, y, w, h = rect.x, rect.y, rect.w, rect.h
-  local barH = math.max(2, math.floor(h * 0.22))
-  local barY = y + h - barH - 2
+  local barY = y + h - CARD_PAD - BAR_H
   if lcd.drawFilledRectangle then
-    lcd.drawFilledRectangle(x, barY, w, barH, _BLACK)
+    lcd.drawFilledRectangle(x, barY, w, BAR_H, _BLACK)
     local fillW = math.floor(w * math.max(0, math.min(1, frac)) + 0.5)
     if fillW > 0 then
       local c = _GREEN
       if frac < 0.25 then c = _RED elseif frac < 0.5 then c = _YELLOW end
       setColor(c)
-      lcd.drawFilledRectangle(x, barY, fillW, barH, CUSTOM_COLOR or c)
+      lcd.drawFilledRectangle(x, barY, fillW, BAR_H, CUSTOM_COLOR or c)
     end
   end
 end
@@ -79,24 +81,62 @@ local function drawShadowText(x, y, text, size, color)
   end
 end
 
-local function drawCompositeCard(rect, icon, title, lines, showBar, frac)
+-- Single padding constant for top/bottom/left/right (8px rhythm per UI/UX plan).
+local CARD_PAD = 8
+local TITLE_TO_BODY_GAP = 8
+local TITLE_H = 12   -- MIDSIZE font height per lua-reference fonts.md
+local SMLSIZE_H = 6  -- SMLSIZE font height for vertical spread
+local BAR_RESERVE = BAR_H + CARD_PAD  -- pixels reserved at bottom when showBar (bar + padding)
+
+local function drawCardBorder(rect, color)
+  if not rect or not lcd or not lcd.drawLine then return end
+  local x, y, w, h = rect.x, rect.y, rect.w, rect.h
+  local c = (type(color) == "number") and color or _WHITE
+  if type(CUSTOM_COLOR) == "number" and lcd.setColor then
+    lcd.setColor(CUSTOM_COLOR, c)
+    c = CUSTOM_COLOR
+  end
+  local solid = (type(SOLID) == "number") and SOLID or 0
+  lcd.drawLine(x, y, x + w - 1, y, solid, c)
+  lcd.drawLine(x, y + h - 1, x + w - 1, y + h - 1, solid, c)
+  lcd.drawLine(x, y, x, y + h - 1, solid, c)
+  lcd.drawLine(x + w - 1, y, x + w - 1, y + h - 1, solid, c)
+end
+
+local function drawCompositeCard(rect, icon, title, lines, showBar, frac, theme)
   if not rect or not lcd then return end
   local x, y, w, h = rect.x, rect.y, rect.w, rect.h
-  local left = x + 2
+  local left = x + CARD_PAD
+  local titleY = y + CARD_PAD
+  -- Align icon vertical center with title line
+  local iconY = titleY + math.floor(TITLE_H / 2) - math.floor(ICON_SIZE / 2)
+  iconY = math.max(y, iconY)
   if icon and lcd.drawBitmap then
-    lcd.drawBitmap(icon, left, y + 4)
+    lcd.drawBitmap(icon, left, iconY)
     left = left + ICON_SIZE + ICON_GAP
   end
-  drawShadowText(left, y + 2, title or "", SMLSIZE, _WHITE)
-  local lineH = 14
-  local yy = y + 18
-  for i = 1, #lines do
-    if yy + lineH <= y + h - (showBar and 12 or 4) then
-      drawShadowText(left, yy, string.sub(lines[i] or "--", 1, 28), SMLSIZE, _WHITE)
-      yy = yy + lineH
+  local maxContentW = w - 2 * CARD_PAD
+  local textColor = theme and theme.textColor or _WHITE
+  drawShadowText(left, titleY, title or "", MIDSIZE, textColor)
+  local bodyY = titleY + TITLE_H + TITLE_TO_BODY_GAP
+  local bodyBottom = y + h - CARD_PAD - (showBar and BAR_RESERVE or 0)
+  -- Spread body lines evenly in card body (equal gap above, between, below)
+  local n = #lines
+  if n > 0 then
+    local bodyHeight = bodyBottom - bodyY
+    local lineH = SMLSIZE_H
+    local totalLineH = n * lineH
+    local gap = (bodyHeight - totalLineH) / (n + 1)
+    for i = 1, n do
+      local yy = bodyY + math.floor(gap + (i - 1) * (lineH + gap))
+      local text = string.sub(lines[i] or "--", 1, 28)
+      drawShadowText(left, yy, text, SMLSIZE, textColor)
     end
   end
   if showBar and frac then drawBar(rect, frac) end
+  -- 1px border consistent with stick panels (SOLID lines per lua-reference-guide drawLine)
+  local borderColor = theme and (theme.borderColor or theme.textColor) or _WHITE
+  drawCardBorder(rect, borderColor)
 end
 
 function M.draw(layout, slots, telemetry, state, theme)
@@ -108,7 +148,7 @@ function M.draw(layout, slots, telemetry, state, theme)
   local function card(id, iconKey, title, lines, showBar, frac)
     local slot = slots.primary[id]
     if not slot then return end
-    drawCompositeCard(slot, icons[iconKey], title, lines, showBar, frac)
+    drawCompositeCard(slot, icons[iconKey], title, lines, showBar, frac, theme)
   end
 
   -- P2: Battery — Title "Battery {V}", Line 1 current A, Line 2 consumed mAh
@@ -120,14 +160,14 @@ function M.draw(layout, slots, telemetry, state, theme)
   local capStr = (av.capacity and cap >= 0) and (tostring(math.floor(cap + 0.5)) .. " mAh") or "-- mAh"
   card("P2", "battery", "Battery " .. batStr, { curStr, capStr }, true, (av.battery and bat > 0) and math.min(1, bat / 12.6) or 0)
 
-  -- P4: Link — Title "LQ { % }", Line 1 TxP and SNR, Line 2 1RSS/2RSS or RSS
+  -- P4: Link — Title "LQ xx%"; Line 1 TxP / SNR (fixed label width); Line 2 RSS or 1RSS/2RSS
   local lq = t and t.linkQuality or 0
   local lqStr = av.linkQuality and (math.floor(lq + 0.5) .. "%") or "--%"
   local tpwr = t and t.txPower or 0
   local tpStr = (av.txPower and tpwr > 0) and (math.floor(tpwr + 0.5) .. "mW") or "--"
   local rsnr = t and t.rsnr
   local snrStr = (av.rsnr and rsnr ~= nil) and tostring(math.floor(rsnr + 0.5)) or "--"
-  local line1Link = "TxP " .. tpStr .. "  SNR " .. snrStr
+  local line1Link = "TxP  " .. tpStr .. "   SNR " .. snrStr
   local r1 = t and t.rssi1 or 0
   local r1Str = (av.rssi1 and r1 ~= 0) and (math.floor(r1 + 0.5) .. "dBm") or "--"
   local r2 = t and t.rssi2 or 0
@@ -136,18 +176,20 @@ function M.draw(layout, slots, telemetry, state, theme)
   local rssiStr = (av.rssi and rssi ~= 0) and (math.floor(rssi + 0.5) .. "dBm") or "--"
   local line2Link
   if av.rssi1 and av.rssi2 then
-    line2Link = "1RSS " .. r1Str .. "  2RSS " .. r2Str
+    line2Link = "1RSS " .. r1Str .. "   2RSS " .. r2Str
   else
-    line2Link = "RSS " .. rssiStr
+    line2Link = "RSS  " .. rssiStr
   end
   card("P4", "signal", "LQ " .. lqStr, { line1Link, line2Link }, true, lq / 100)
 
-  -- P5: Temperature — Title "Temperature", Line 1 FC ESC, Line 2 VTX M
-  local fcStr = (av.tempFC and t.tempFC ~= nil) and ("FC " .. math.floor(t.tempFC + 0.5) .. "°") or "FC --"
-  local escStr = (av.tempESC and t.tempESC ~= nil) and ("ESC " .. math.floor(t.tempESC + 0.5) .. "°") or "ESC --"
-  local vtxStr = (av.tempVTX and t.tempVTX ~= nil) and ("VTX " .. math.floor(t.tempVTX + 0.5) .. "°") or "VTX --"
-  local mStr = (av.tempMotor and t.tempMotor ~= nil) and ("M " .. math.floor(t.tempMotor + 0.5) .. "°") or "M --"
-  card("P5", "current", "Temperature", { fcStr .. "  " .. escStr, vtxStr .. "  " .. mStr }, false, nil)
+  -- P5: Temperature — Title "Temperature"; Line 1 FC / ESC, Line 2 VTX / M (fixed spacing)
+  local fcStr = (av.tempFC and t.tempFC ~= nil) and (math.floor(t.tempFC + 0.5) .. "°") or "--"
+  local escStr = (av.tempESC and t.tempESC ~= nil) and (math.floor(t.tempESC + 0.5) .. "°") or "--"
+  local vtxStr = (av.tempVTX and t.tempVTX ~= nil) and (math.floor(t.tempVTX + 0.5) .. "°") or "--"
+  local mStr = (av.tempMotor and t.tempMotor ~= nil) and (math.floor(t.tempMotor + 0.5) .. "°") or "--"
+  local line1Temp = "FC   " .. fcStr .. "   ESC " .. escStr
+  local line2Temp = "VTX  " .. vtxStr .. "   M   " .. mStr
+  card("P5", "current", "Temperature", { line1Temp, line2Temp }, false, nil)
 
   -- P6: Drone GPS — Title "Drone Sat: {n}", Line 1 Lat, Line 2 Long
   local sats = t and (t.sats or t.satellites) or 0

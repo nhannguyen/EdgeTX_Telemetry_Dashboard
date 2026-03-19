@@ -6,16 +6,20 @@ local WIDGET_PATH = "DASH800"
 local _WHITE = (type(WHITE) == "number") and WHITE or 0xFFFF
 local _BLACK = 0x0000
 local _RED = (type(RED) == "number") and RED or 0xF800
-local LINK_ICON_W, LINK_ICON_H = 24, 24
-local BATTERY_ICON_W = 20
-local FM_ICON_W = 22
+-- Icon size tokens (consistent with cards/timers).
+local ICON_TOPBAR_SMALL = 20
+local ICON_TOPBAR_LARGE = 24
+local ICON_TOPBAR_FM = 22
+local LINK_ICON_W, LINK_ICON_H = ICON_TOPBAR_LARGE, ICON_TOPBAR_LARGE
+local BATTERY_ICON_W = ICON_TOPBAR_SMALL
+local FM_ICON_W = ICON_TOPBAR_FM
 
 local _TEXT_COLOR = _WHITE
 local _TEXT_SHADOW = _BLACK
 
 local _iconLinkOn, _iconLinkOff, _iconTxBattery, _iconAntenna
 local _iconFm = {}
-local ANTENNA_ICON_W, ANTENNA_ICON_H = 20, 20
+local ANTENNA_ICON_W, ANTENNA_ICON_H = ICON_TOPBAR_SMALL, ICON_TOPBAR_SMALL
 local _iconsLoaded = false
 local _loadedTheme = nil
 
@@ -127,6 +131,17 @@ local function truncateAntenna(text, maxChars)
   return string.sub(text, 1, maxChars - 2) .. ".."
 end
 
+-- Top bar height (matches layout.lua TOP_BAR_H) for banner region when link lost.
+local TOP_BAR_H = 44
+
+local function anyAvailable(av)
+  if not av or type(av) ~= "table" then return false end
+  for _, v in pairs(av) do
+    if v then return true end
+  end
+  return false
+end
+
 function M.draw(bounds, telemetry, state, theme)
   if not bounds then return end
   _TEXT_COLOR = (theme and theme.textColor) or _WHITE
@@ -134,6 +149,26 @@ function M.draw(bounds, telemetry, state, theme)
   ensureIcons(theme)
 
   local x, y, w, h = bounds.x, bounds.y, bounds.w, bounds.h
+
+  -- Link-lost / no-telemetry banner inside top bar (no separate row, no overlap with cards).
+  if telemetry and telemetry.linkLost and lcd and lcd.drawFilledRectangle then
+    if type(CUSTOM_COLOR) == "number" and lcd.setColor then
+      lcd.setColor(CUSTOM_COLOR, _RED)
+      lcd.drawFilledRectangle(x, y, w, h, CUSTOM_COLOR)
+    else
+      lcd.drawFilledRectangle(x, y, w, h, _RED)
+    end
+    local msg = (telemetry.available and anyAvailable(telemetry.available))
+      and "LINK LOST - last values shown"
+      or "No telemetry"
+    local inset = 8
+    local maxW = w - 2 * inset
+    local bannerText = truncate(msg, maxW, 4)  -- SMLSIZE ~4-5px per char
+    local textY = y + math.floor((h - 6) / 2)  -- SMLSIZE ~6px height
+    drawShadowText(x + inset, textY, bannerText, SMLSIZE, _WHITE)
+    return
+  end
+
   local nameW = math.floor(w * 0.28)
   local nameText = truncate(droneName(telemetry), nameW - 8, 6)
   drawShadowText(x + 8, y + math.floor((h - 12) / 2), nameText, MIDSIZE, _TEXT_COLOR)
