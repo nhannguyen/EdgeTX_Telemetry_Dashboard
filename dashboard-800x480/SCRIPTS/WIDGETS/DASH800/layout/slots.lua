@@ -28,11 +28,13 @@ function M.compute(layout)
   local gap = layout.gap or 2
   local slots = { primary = {}, timers = {}, byId = {} }
 
-  -- Row 1: 3 slots -> P1 LeftStick, P2 Battery, P3 RightStick
-  local row1 = splitColumns(layout.cardRow1, 3, gap)
-  slots.primary.P1 = withSlot("P1", "leftStick", row1[1])
-  slots.primary.P2 = withSlot("P2", "battery", row1[2])
-  slots.primary.P3 = withSlot("P3", "rightStick", row1[3])
+  -- Row 1: P1 (left stick, square), P2 (battery, remaining width), P3 (right stick, square)
+  local r1 = layout.cardRow1
+  local stickW = r1.h  -- square panels: width = row height
+  local batW = math.max(40, r1.w - 2 * stickW - 2 * gap)
+  slots.primary.P1 = withSlot("P1", "leftStick",  rect(r1.x,                            r1.y, stickW, r1.h))
+  slots.primary.P2 = withSlot("P2", "battery",    rect(r1.x + stickW + gap,             r1.y, batW,   r1.h))
+  slots.primary.P3 = withSlot("P3", "rightStick", rect(r1.x + stickW + gap + batW + gap, r1.y, stickW, r1.h))
 
   -- Row 2: 2 slots -> P4 Link, P5 Temps
   local row2 = splitColumns(layout.cardRow2, 2, gap)

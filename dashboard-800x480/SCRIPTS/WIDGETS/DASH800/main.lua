@@ -27,7 +27,6 @@ local elrsModule     = loadModule("telemetry/elrs.lua")
 local topbarRenderer = loadModule("render/topbar.lua")
 local sticksRenderer = loadModule("render/sticks.lua")
 local cardsRenderer  = loadModule("render/cards.lua")
-local contextRenderer = loadModule("render/context.lua")
 local timersRenderer = loadModule("render/timers.lua")
 
 local _WHITE = (type(WHITE) == "number") and WHITE or 0xFFFF
@@ -85,14 +84,6 @@ local function drawSectionWash(rect, theme, colorOverride)
     lcd.setColor(CUSTOM_COLOR, fillColor)
     pcall(lcd.drawFilledRectangle, rect.x, rect.y, rect.w, rect.h, CUSTOM_COLOR, theme.transparency)
   end
-end
-
-local function anyAvailable(av)
-  if not av or type(av) ~= "table" then return false end
-  for _, v in pairs(av) do
-    if v then return true end
-  end
-  return false
 end
 
 local function zoneChanged(widget)
@@ -236,14 +227,15 @@ local function refresh(widget, event, touchState)
 
   if topbarRenderer and topbarRenderer.draw then
     local topBarColor = topBarColorFromArmState(widget.telemetry) or theme.bgColor
-    drawSectionWash(widget.layout.topBar, theme, topBarColor)
-    topbarRenderer.draw(widget.layout.topBar, widget.telemetry, widget.state, theme)
+    -- Background wash spans full zone width so link-lost red fills edge-to-edge.
+    local tb = widget.layout.topBar
+    local fullTopBar = { x = widget.zone.x, y = tb.y, w = widget.zone.w, h = tb.h }
+    drawSectionWash(fullTopBar, theme, topBarColor)
+    -- Content drawn in the inset rect to clear left/right slider chrome.
+    topbarRenderer.draw(tb, widget.telemetry, widget.state, theme)
   end
 
   local slots = widget.slots
-  local t = widget.telemetry
-  local noTelemetry = t and (t.linkLost or not t.connected) and not anyAvailable(t.available or {})
-
   if slots and slots.byId then
     local p1 = slots.byId.P1
     local p2 = slots.byId.P2
@@ -260,35 +252,14 @@ local function refresh(widget, event, touchState)
     if p6 then drawSectionWash(p6, theme) end
     if p7 then drawSectionWash(p7, theme) end
 
-    if noTelemetry then
-      -- Single centered message instead of full grid of "--" (optional no-telemetry view)
-      local layout = widget.layout
-      local gap = layout.gap or 2
-      local cardY = layout.cardRow1.y
-      local cardH = layout.cardRow1.h + gap + layout.cardRow2.h + gap + layout.cardRow3.h
-      local msg = "Connect receiver for telemetry"
-      local msgW, msgH = #msg * 5, 12
-      local cx = layout.cardRow1.x + math.floor((layout.cardRow1.w - msgW) / 2)
-      local cy = cardY + math.floor((cardH - msgH) / 2)
-      if lcd and lcd.drawText then
-        local tc = theme.textColor or (type(WHITE) == "number" and WHITE or 0xFFFF)
-        if type(CUSTOM_COLOR) == "number" and lcd.setColor then
-          lcd.setColor(CUSTOM_COLOR, tc)
-          lcd.drawText(cx, cy, msg, MIDSIZE + CUSTOM_COLOR)
-        else
-          lcd.drawText(cx, cy, msg, MIDSIZE)
-        end
-      end
-    else
-      if sticksRenderer and sticksRenderer.drawLeftStick and p1 then
-        sticksRenderer.drawLeftStick(p1, theme, widget.telemetry)
-      end
-      if cardsRenderer and cardsRenderer.draw then
-        cardsRenderer.draw(widget.layout, widget.slots, widget.telemetry, widget.state, theme)
-      end
-      if sticksRenderer and sticksRenderer.drawRightStick and p3 then
-        sticksRenderer.drawRightStick(p3, theme, widget.telemetry)
-      end
+    if sticksRenderer and sticksRenderer.drawLeftStick and p1 then
+      sticksRenderer.drawLeftStick(p1, theme, widget.telemetry)
+    end
+    if cardsRenderer and cardsRenderer.draw then
+      cardsRenderer.draw(widget.layout, widget.slots, widget.telemetry, widget.state, theme)
+    end
+    if sticksRenderer and sticksRenderer.drawRightStick and p3 then
+      sticksRenderer.drawRightStick(p3, theme, widget.telemetry)
     end
   end
 
@@ -298,6 +269,7 @@ local function refresh(widget, event, touchState)
       timersRenderer.draw(widget.layout.timersRow, widget.telemetry, widget.state, theme, widget)
     end
   end
+
 end
 
 return {

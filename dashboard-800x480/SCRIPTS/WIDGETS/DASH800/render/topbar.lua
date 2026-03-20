@@ -161,11 +161,15 @@ function M.draw(bounds, telemetry, state, theme)
     local msg = (telemetry.available and anyAvailable(telemetry.available))
       and "LINK LOST - last values shown"
       or "No telemetry"
-    local inset = 8
-    local maxW = w - 2 * inset
-    local bannerText = truncate(msg, maxW, 4)  -- SMLSIZE ~4-5px per char
-    local textY = y + math.floor((h - 6) / 2)  -- SMLSIZE ~6px height
-    drawShadowText(x + inset, textY, bannerText, SMLSIZE, _WHITE)
+    -- Color LCD: MIDSIZE ≈ 40px tall, ~12px per char wide
+    local MIDSIZE_H = 40
+    local MIDSIZE_CW = 12
+    local maxW = w - 16
+    local bannerText = truncate(msg, maxW, MIDSIZE_CW)
+    local textW = #bannerText * MIDSIZE_CW
+    local textX = x + math.floor((w - textW) / 2)
+    local textY = y + math.floor((h - MIDSIZE_H) / 2)
+    drawShadowText(textX, textY, bannerText, MIDSIZE, _WHITE)
     return
   end
 

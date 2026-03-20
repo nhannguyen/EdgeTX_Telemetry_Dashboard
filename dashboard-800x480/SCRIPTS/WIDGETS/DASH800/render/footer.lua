@@ -33,14 +33,17 @@ local function edgeTxVersion()
   return _edgeTxCached
 end
 
+local SMLSIZE_H = 8  -- SMLSIZE height on color LCD (TX16S Mk3)
+
 function M.draw(rect, telemetry, state, theme)
   if not rect then return end
   local textColor = (theme and theme.textColor) or _WHITE
   local elrsStr = (telemetry and type(telemetry.elrsVersion) == "string" and #telemetry.elrsVersion > 0)
     and telemetry.elrsVersion or "ELRS"
-  drawText(rect.x + 4, rect.y - 1, elrsStr, SMLSIZE, textColor)
+  local textY = rect.y + math.floor((rect.h - SMLSIZE_H) / 2)
+  drawText(rect.x + 4, textY, elrsStr, SMLSIZE, textColor)
   local et = edgeTxVersion()
-  drawText(rect.x + rect.w - #et * 6 - 4, rect.y - 1, et, SMLSIZE, textColor)
+  drawText(rect.x + rect.w - #et * 6 - 4, textY, et, SMLSIZE, textColor)
 end
 
 return M

@@ -3,8 +3,8 @@
 local M = {}
 
 local WIDGET_PATH = "DASH800"
--- Icon size tokens: ICON_TITLE for card title icons (consistent with topbar/timers naming).
-local ICON_TITLE = 16
+-- Icon size tokens: ICON_TITLE matches MIDSIZE font height on color LCD so icons align with titles.
+local ICON_TITLE = 28
 local ICON_SIZE = ICON_TITLE
 local ICON_GAP = 8
 local BAR_H = 4       -- thin progress bar at bottom
@@ -13,6 +13,15 @@ local _BLACK = 0x0000
 local _GREEN = (type(GREEN) == "number") and GREEN or 0x07E0
 local _YELLOW = (type(YELLOW) == "number") and YELLOW or 0xFFE0
 local _RED = (type(RED) == "number") and RED or 0xF800
+
+-- Single padding constant for top/bottom/left/right (8px rhythm per UI/UX plan).
+-- Must be declared before drawBar and drawCompositeCard which reference it.
+local CARD_PAD = 8
+local TITLE_TO_BODY_GAP = 6
+-- Color LCD (TX16S Mk3 800x480) font heights differ from monochrome Taranis in fonts.md.
+local TITLE_H = 28   -- MIDSIZE height on color LCD (~28px observed)
+local SMLSIZE_H = 8  -- SMLSIZE height on color LCD
+local BAR_RESERVE = BAR_H + CARD_PAD  -- pixels reserved at bottom when showBar (bar + padding)
 
 local icons = {}
 local _iconsLoaded = false
@@ -43,6 +52,12 @@ local function ensureIcons(theme)
   icons.current = openBitmap(roots, { "current.png" })
   icons.sat = openBitmap(roots, { "sat.png" })
   icons.antenna = openBitmap(roots, { "antenna.png" })
+  -- Resize icons to match MIDSIZE title font height for perfect vertical alignment.
+  if Bitmap and type(Bitmap.resize) == "function" then
+    for _, k in ipairs({ "battery", "signal", "current", "sat", "antenna" }) do
+      if icons[k] then Bitmap.resize(icons[k], ICON_SIZE, ICON_SIZE) end
+    end
+  end
   _iconsLoaded = true
 end
 
@@ -81,12 +96,6 @@ local function drawShadowText(x, y, text, size, color)
   end
 end
 
--- Single padding constant for top/bottom/left/right (8px rhythm per UI/UX plan).
-local CARD_PAD = 8
-local TITLE_TO_BODY_GAP = 8
-local TITLE_H = 12   -- MIDSIZE font height per lua-reference fonts.md
-local SMLSIZE_H = 6  -- SMLSIZE font height for vertical spread
-local BAR_RESERVE = BAR_H + CARD_PAD  -- pixels reserved at bottom when showBar (bar + padding)
 
 local function drawCardBorder(rect, color)
   if not rect or not lcd or not lcd.drawLine then return end
@@ -103,21 +112,31 @@ local function drawCardBorder(rect, color)
   lcd.drawLine(x + w - 1, y, x + w - 1, y + h - 1, solid, c)
 end
 
+local function bitmapH(bmp)
+  if bmp and Bitmap and type(Bitmap.getSize) == "function" then
+    local _, h = Bitmap.getSize(bmp)
+    if h and h > 0 then return h end
+  end
+  return ICON_SIZE
+end
+
 local function drawCompositeCard(rect, icon, title, lines, showBar, frac, theme)
   if not rect or not lcd then return end
   local x, y, w, h = rect.x, rect.y, rect.w, rect.h
   local left = x + CARD_PAD
   local titleY = y + CARD_PAD
-  -- Align icon vertical center with title line
-  local iconY = titleY + math.floor(TITLE_H / 2) - math.floor(ICON_SIZE / 2)
+  -- Compute iconY: vertically center icon within TITLE_H range.
+  -- Title text is then drawn at iconY so text top aligns with icon top.
+  local ih = icon and bitmapH(icon) or 0
+  local iconY = titleY + math.floor(TITLE_H / 2) - math.floor(ih / 2)
   iconY = math.max(y, iconY)
   if icon and lcd.drawBitmap then
     lcd.drawBitmap(icon, left, iconY)
-    left = left + ICON_SIZE + ICON_GAP
+    left = left + ih + ICON_GAP
   end
-  local maxContentW = w - 2 * CARD_PAD
   local textColor = theme and theme.textColor or _WHITE
-  drawShadowText(left, titleY, title or "", MIDSIZE, textColor)
+  -- Draw title at iconY so text top aligns with icon top.
+  drawShadowText(left, iconY, title or "", MIDSIZE, textColor)
   local bodyY = titleY + TITLE_H + TITLE_TO_BODY_GAP
   local bodyBottom = y + h - CARD_PAD - (showBar and BAR_RESERVE or 0)
   -- Spread body lines evenly in card body (equal gap above, between, below)
